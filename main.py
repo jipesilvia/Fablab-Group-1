@@ -47,6 +47,7 @@ async def watchButton():
     global pressed, beepTimes, buzzTime
     while True:
         if button_green.value() == 0:
+            if failed: break
             if pressed: break
             print("button pressed!")
             pressed = True
