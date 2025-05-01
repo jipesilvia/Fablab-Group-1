@@ -138,8 +138,28 @@ async def buzzerLoop(color: str):
         await asyncio.sleep(buzzTime)
         beepTimes -= 1
         buzzTime *= speedinPercentage
+        await asyncio.sleep_ms(10)
     print("buzzerBreak")
 
+
+async def otherLoop(color):
+    global beepTimes, buzzTime, failed
+
+    while True:
+        if pressed: break
+        if beepTimes <= 0:
+            if failed: break
+            failed = True
+            await playFailTone()
+            quit()
+            break
+        #print("buzz")
+        await blinkAndBuzz(1000, buzzTime, color)
+        await asyncio.sleep(buzzTime)
+        beepTimes -= 1
+        buzzTime *= speedinPercentage
+        await asyncio.sleep_ms(10)
+    print("buzzerBreak")
 
 
 
