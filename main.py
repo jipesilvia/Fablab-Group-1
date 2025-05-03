@@ -1,5 +1,4 @@
 from machine import (Pin, ADC, PWM)
-import machine
 import uasyncio as asyncio
 import random
 
@@ -14,22 +13,26 @@ recursions = 0
 previousColor = "nul"
 colors = ["green", "red", "yellow", "white"]
 
-potentiometer = machine.ADC(26)
+potentiometer = ADC(26)
 
-#button_red = Pin(28, Pin.IN, Pin.PULL_DOWN)
-button_green = Pin(14, Pin.IN, Pin.PULL_UP)
-#button_yellow = Pin(17, Pin.IN, Pin.PULL_DOWN)
+potTarget = -1
+POT_RANGE = 0.25
+
+
+button_red = Pin(0, Pin.IN, Pin.PULL_UP)
+button_green = Pin(12, Pin.IN, Pin.PULL_UP)
+button_yellow = Pin(13, Pin.IN, Pin.PULL_UP)
 
 pressed = False
 failed = False
 
-#red_led = Pin(3, Pin.OUT)
-green_led = Pin(15, Pin.OUT)
-#yellow_led = Pin(12, Pin.OUT)
-#white_led = Pin(0, Pin.OUT)
+red_led = Pin(1, Pin.OUT)
+green_led = Pin(14, Pin.OUT)
+yellow_led = Pin(16, Pin.OUT)
+white_led = Pin(15, Pin.OUT)
 
 
-buzzer = PWM(Pin(16))
+buzzer = PWM(Pin(10))
 
 async def buzz(frequency: int, duration: float):
     if frequency > 0:
@@ -42,20 +45,19 @@ async def buzz(frequency: int, duration: float):
 
 
 async def blink(duration: float, color: str):
-    
 
     if color == "green":
         green_led.on()
         #print("green")
     elif color == "red":
-        #red_led.on()
-        print("red")
+        red_led.on()
+        #print("red")
     elif color == "yellow":
-        #yellow_led.on()
-        print("yellow")
+        yellow_led.on()
+        #print("yellow")
     elif color == "white":
-        #hite_led.on()
-        print("white")
+        white_led.on()
+        #print("white")
     else:
         print("error")
         quit()
@@ -67,14 +69,14 @@ async def blink(duration: float, color: str):
         green_led.off()
         #print("green")
     elif color == "red":
-        #red_led.off()
-        print("red")
+        red_led.off()
+        #print("red")
     elif color == "yellow":
-        #yellow_led.off()
-        print("yellow")
+        yellow_led.off()
+        #print("yellow")
     elif color == "white":
-        #hite_led.off()
-        print("white")
+        white_led.off()
+        #print("white")
     else:
         print("error")
         quit()
@@ -82,7 +84,7 @@ async def blink(duration: float, color: str):
 
 
 async def watchButton(button: Pin):
-    global pressed, beepTimes, buzzTime
+    global pressed, beepTimes, buzzTime, speedinPercentage
     while True:
         if button.value() == 0:
             if failed: break
@@ -93,13 +95,46 @@ async def watchButton(button: Pin):
             await asyncio.sleep(buzzTime)
             beepTimes = 25
             buzzTime = 0.2
+            speedinPercentage *= 0.95
+            print(speedinPercentage)
 
             await playSuccessfulTune()
-            #asyncio.run(main())
             return
             
 
         await asyncio.sleep_ms(10)
+
+async def watchPot():
+    global buzzTime, speedinPercentage, beepTimes, pressed
+
+    counter = 0
+    while True:
+        if failed: return
+
+        if isInRange:
+            if counter >= 3000:
+                if pressed: break
+                pressed = True
+                await asyncio.sleep(buzzTime)
+                beepTimes = 50
+                buzzTime = 0.2
+                speedinPercentage *= 0.9
+                await playSuccessfulTune()
+                
+                return
+            counter += 10
+        else:
+            pressed = False
+            counter = 0
+
+        await asyncio.sleep_ms(10)
+
+
+        
+
+
+
+
 
 
 
@@ -121,10 +156,58 @@ async def playFailTone():
 async def blinkAndBuzz(frequency: int, duration: float, color: str):
     await asyncio.gather(buzz(frequency,duration), blink(duration, color))
 
+def getPotValue():
+    rawValue = potentiometer.read_u16()
+    pm_max_value = 66000
+
+    normalizedValue = rawValue/pm_max_value
+
+    if normalizedValue > 1: return 1
+
+    return normalizedValue
+
+def getFrequency(randomValue, value):
+    MIN_FREQUENXY = 500
+    MAX_FREQUENXY = 5000
+
+    targetRange = [randomValue - POT_RANGE, randomValue + POT_RANGE]
+    if value >= targetRange[0] and value <= targetRange[1]:
+        return MAX_FREQUENXY
+    
+    if value > targetRange[0] - 0.25 and value < targetRange[1] + 0.25:
+        distance = 0
+        if value < targetRange[0]:
+            distance = targetRange[0] - value
+        elif value > targetRange[1]:
+            distance = value - targetRange[1]
+        else:
+            print("error in gf")
+            quit()
+        normalizedDistance = distance/0.25
+        frequencyRange = MAX_FREQUENXY - MIN_FREQUENXY
+        frequency = int(MIN_FREQUENXY + frequencyRange*normalizedDistance)
+        return frequency
+    else:
+        return MIN_FREQUENXY
+        
+        
+def isInRange():
+    potValue = getPotValue()
+    if potValue >= potTarget - POT_RANGE and potValue <= potTarget + POT_RANGE:
+        return True
+    return False
 
 
 async def buzzerLoop(color: str):
-    global beepTimes, buzzTime, failed
+    global beepTimes, buzzTime, failed, potTarget, speedinPercentage
+    potTarget = -1
+    
+    if color == "white": 
+        potTarget = random.random()
+        beepTimes = 50
+        speedinPercentage = 0.95
+
+    potTarget = 0.5
     while True:
         if pressed: break
         if beepTimes <= 0:
@@ -134,56 +217,51 @@ async def buzzerLoop(color: str):
             quit()
             break
         #print("buzz")
-        await blinkAndBuzz(1000, buzzTime, color)
+        if potTarget == -1:
+            await blinkAndBuzz(1000, buzzTime, color)
+        else:
+            await blinkAndBuzz(getFrequency(potTarget, getPotValue()), buzzTime, color)
         await asyncio.sleep(buzzTime)
         beepTimes -= 1
         buzzTime *= speedinPercentage
-        await asyncio.sleep_ms(10)
     print("buzzerBreak")
 
-
-async def otherLoop(color):
-    global beepTimes, buzzTime, failed
-
-    while True:
-        if pressed: break
-        if beepTimes <= 0:
-            if failed: break
-            failed = True
-            await playFailTone()
-            quit()
-            break
-        #print("buzz")
-        await blinkAndBuzz(1000, buzzTime, color)
-        await asyncio.sleep(buzzTime)
-        beepTimes -= 1
-        buzzTime *= speedinPercentage
-        await asyncio.sleep_ms(10)
-    print("buzzerBreak")
 
 
 
 async def main():
-    global pressed, failed, previousColor, recursions
+    global pressed, failed, previousColor, recursions, potTarget
     
     while True:
 
         pressed = False
+        potTarget = -1
         
-        availableColors: list[str] = colors
+        availableColors: list[str] = colors[:]
         
         if previousColor != "nul":
             availableColors.remove(previousColor)
         
         randomIndex = random.randint(0, len(availableColors) - 1)
         color = availableColors[randomIndex]
-        color = "green"
+        previousColor = color
 
-        recursions += 1
-        print("recursions: ")
-        print(recursions)
 
-        await asyncio.gather(buzzerLoop(color), watchButton(button_green))
+        button = button_green
+
+        #color = "white"
+
+        print(color)
+        #color = "white"
+
+        if color == "green": button = button_green
+        elif color == "red": button = button_red
+        elif color == "yellow": button = button_yellow
+        elif color == "white":
+            await asyncio.gather(buzzerLoop(color), watchPot())
+            continue
+
+        await asyncio.gather(buzzerLoop(color), watchButton(button))
 
 
 
