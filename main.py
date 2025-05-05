@@ -7,6 +7,7 @@ beepTimes = 25
 timeToComplete = 3
 buzzTime = 0.200
 speedinPercentage = 0.85
+potSpeedingPercentage = 0.95
 
 recursions = 0
 
@@ -16,8 +17,7 @@ colors = ["green", "red", "yellow", "white"]
 potentiometer = ADC(26)
 
 potTarget = -1
-POT_RANGE = 0.25
-
+POT_RANGE = 0.08
 
 button_red = Pin(0, Pin.IN, Pin.PULL_UP)
 button_green = Pin(12, Pin.IN, Pin.PULL_UP)
@@ -35,9 +35,10 @@ white_led = Pin(15, Pin.OUT)
 buzzer = PWM(Pin(10))
 
 async def buzz(frequency: int, duration: float):
+    duty = int(65535 * 0.5)
     if frequency > 0:
         buzzer.freq(frequency)  # Set frequency
-        buzzer.duty_u16(32768)  # 50% duty cycle (half power)
+        buzzer.duty_u16(duty)  # 50% duty cycle (half power)
     await asyncio.sleep(duration)
     if frequency > 0:
         buzzer.duty_u16(0)      # Turn buzzer off
@@ -93,7 +94,6 @@ async def watchButton(button: Pin):
             pressed = True
 
             await asyncio.sleep(buzzTime)
-            beepTimes = 25
             buzzTime = 0.2
             speedinPercentage *= 0.95
             print(speedinPercentage)
@@ -105,37 +105,27 @@ async def watchButton(button: Pin):
         await asyncio.sleep_ms(10)
 
 async def watchPot():
-    global buzzTime, speedinPercentage, beepTimes, pressed
+    global buzzTime, speedinPercentage, potSpeedingPercentage, beepTimes, pressed
 
     counter = 0
     while True:
         if failed: return
-
-        if isInRange:
-            if counter >= 3000:
+        if isInRange():
+            if counter >= int(potSpeedingPercentage*20):
                 if pressed: break
                 pressed = True
                 await asyncio.sleep(buzzTime)
-                beepTimes = 50
                 buzzTime = 0.2
-                speedinPercentage *= 0.9
+                potSpeedingPercentage *= 0.95
                 await playSuccessfulTune()
                 
                 return
-            counter += 10
+            counter += 1
         else:
             pressed = False
             counter = 0
-
+        print(counter)
         await asyncio.sleep_ms(10)
-
-
-        
-
-
-
-
-
 
 
 async def playTune(frequencies_and_durations: list[tuple[int, float]]):
@@ -167,12 +157,18 @@ def getPotValue():
     return normalizedValue
 
 def getFrequency(randomValue, value):
-    MIN_FREQUENXY = 500
+    global power
+    
+    MIN_FREQUENXY = 1000
     MAX_FREQUENXY = 5000
 
+
+
     targetRange = [randomValue - POT_RANGE, randomValue + POT_RANGE]
-    if value >= targetRange[0] and value <= targetRange[1]:
+    if isInRange():
         return MAX_FREQUENXY
+    else:
+        return MIN_FREQUENXY
     
     if value > targetRange[0] - 0.25 and value < targetRange[1] + 0.25:
         distance = 0
@@ -186,7 +182,7 @@ def getFrequency(randomValue, value):
         normalizedDistance = distance/0.25
         frequencyRange = MAX_FREQUENXY - MIN_FREQUENXY
         frequency = int(MIN_FREQUENXY + frequencyRange*normalizedDistance)
-        return frequency
+        return MIN_FREQUENXY
     else:
         return MIN_FREQUENXY
         
@@ -201,13 +197,20 @@ def isInRange():
 async def buzzerLoop(color: str):
     global beepTimes, buzzTime, failed, potTarget, speedinPercentage
     potTarget = -1
-    
     if color == "white": 
         potTarget = random.random()
+        if isInRange():
+            if potTarget > 0.5:
+                potTarget -= 0.25
+            else:
+                potTarget += 0.25
         beepTimes = 50
-        speedinPercentage = 0.95
-
-    potTarget = 0.5
+        #speedinPercentage = 0.95
+    else:
+        beepTimes = 25
+    
+    print(potTarget)
+    #potTarget = 0.5
     while True:
         if pressed: break
         if beepTimes <= 0:
@@ -219,11 +222,13 @@ async def buzzerLoop(color: str):
         #print("buzz")
         if potTarget == -1:
             await blinkAndBuzz(1000, buzzTime, color)
+            buzzTime *= speedinPercentage
         else:
             await blinkAndBuzz(getFrequency(potTarget, getPotValue()), buzzTime, color)
+            buzzTime *= potSpeedingPercentage
         await asyncio.sleep(buzzTime)
         beepTimes -= 1
-        buzzTime *= speedinPercentage
+        
     print("buzzerBreak")
 
 
@@ -235,7 +240,6 @@ async def main():
     while True:
 
         pressed = False
-        potTarget = -1
         
         availableColors: list[str] = colors[:]
         
@@ -252,7 +256,6 @@ async def main():
         #color = "white"
 
         print(color)
-        #color = "white"
 
         if color == "green": button = button_green
         elif color == "red": button = button_red

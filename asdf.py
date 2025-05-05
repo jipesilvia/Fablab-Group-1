@@ -30,25 +30,28 @@ def getPotValue():
     print(normalizedValue)
     return normalizedValue
 
-async def buzz():
+def buzz():
+    global frequency
+    buzzer.duty_u16(32768)  # 50% duty cycle (half power)
+
+    while True:
+        buzzer.freq(frequency)  # Set frequency
+        
+
+
+
+def trackPot():
     global frequency
     while True:
-        #buzzer.freq(frequency)  # Set frequency
-        buzzer.duty_u16(32768)  # 50% duty cycle (half power)
-        await asyncio.sleep_ms(10)
-
-
-
-async def trackPot():
-    global frequency
-    while True:
-        frequency = int(100 + 20000*getPotValue())
+        frequency = int(500 + 10000*getPotValue())
         print(frequency)
-        await asyncio.sleep_ms(10)
 
-
-
-async def main():
-    await asyncio.gather(trackPot(), buzz())
-
-asyncio.run(main())
+#32768
+while True:
+    frequency = int(2000+4500*getPotValue())
+    buzzer.duty_u16(32768)
+    buzzer.freq(frequency)
+    print(buzzer.freq())
+    time.sleep_ms(100)
+    buzzer.duty_u16(0)
+    time.sleep_ms(100)
