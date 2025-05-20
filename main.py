@@ -133,11 +133,15 @@ async def playTune(frequencies_and_durations: list[tuple[int, float]]):
     for frequency_and_duration in frequencies_and_durations:
         #print(frequency_and_duration[0])
         await buzz(frequency_and_duration[0], frequency_and_duration[1])
-    
+        
 
 async def playSuccessfulTune():
     frequencies_and_durations = [(4000, 0.05),(0, 0.05),(4000, 0.05), (0, 0.05), (4000, 0.05), (0, 0.05), (4000, 0.05), (0, 0.05), (4000, 0.05)]
     await playTune(frequencies_and_durations)
+
+async def playStartTune():
+    fAndDs = [(4000, 0.5),(0,0.5),(4000, 0.5),(0,0.5),(4000, 0.5)]
+    await playTune(fAndDs)
 
 async def playFailTone():
     frequencies_and_durations = [(10000, 2.0),(0, 1.0)]
@@ -156,9 +160,7 @@ def getPotValue():
 
     return normalizedValue
 
-def getFrequency(randomValue, value):
-    global power
-    
+def getFrequency(randomValue, value):    
     MIN_FREQUENXY = 1000
     MAX_FREQUENXY = 5000
 
@@ -236,7 +238,8 @@ async def buzzerLoop(color: str):
 
 async def main():
     global pressed, failed, previousColor, recursions, potTarget
-    
+    await playStartTune()
+    await asyncio.sleep(1)
     while True:
 
         pressed = False
